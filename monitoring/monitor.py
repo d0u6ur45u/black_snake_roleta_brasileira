@@ -107,7 +107,7 @@ async def enviar_tendencias_telegram(
     roulette_id, top_tendencias, tendencias, historico_size
 ):
     message = "📊 *TENDÊNCIAS ATUALIZADAS* 📊\n\n"
-    message += "⚠️ *RED SNAKE* ⚠️\n\n"
+    message += "⚠️ *BLACK SNAKE* ⚠️\n\n"
     message += f"🎰 Mesa: {escape_markdown_v2(roulette_id)} - Playtech\n\n"
     for i, (num, stats) in enumerate(top_tendencias, 1):
         message += f"{i}º - Número *{num}*: _{stats['porcentagem']}%_ ({stats['chamou_black_snake']}/{stats['total']})\n\n"
