@@ -35,6 +35,9 @@ estado_mesas = defaultdict(
         "top_tendencias": [],
         "contador_rodadas": 0,
         "ultima_atualizacao_tendencias": None,
+        "entrada_ativa": False,
+        "numero_entrada": None,
+        "gale": 0,
     }
 )
 
@@ -93,13 +96,7 @@ def formatar_tendencias_console(
 
 async def notificar_entrada(roulette_id, numero, tendencias):
     stats = tendencias[numero]
-    message = (
-        f"🔥 ENTRADA CONFIRMADA! 🔥\n\n"
-        f"🎰 Mesa: {escape_markdown_v2(roulette_id)} - Playtech\n"
-        f"🎯 Número: {numero}\n"
-        f"📈 Tendência: {stats['porcentagem']}% (BLACK_SNAKE em{stats['chamou_black_snake']}/{stats['total']})\n"
-        f"🔍 BLACK_SNAKE esperado após este número"
-    )
+    message = f"🔥 ENTRADA Padrão BLACK SNAKE - {numero} ({stats['chamou_black_snake']}/{stats['total']})\n"
     await send_telegram_message(message, LINK_MESA_BASE)
 
 
@@ -127,6 +124,10 @@ async def monitor_roulette(roulette_id):
     mesa = estado_mesas[roulette_id]
     mesa["notificacao_inicial_enviada"] = False
     mesa["ultima_porcentagem_top"] = {}
+    mesa["entrada_ativa"] = False
+    mesa["numero_entrada"] = None
+    mesa["gale"] = 0
+    mesa["ultimo_numero_processado"] = None
 
     async with aiohttp.ClientSession() as session:
         while True:
@@ -145,6 +146,7 @@ async def monitor_roulette(roulette_id):
                             "sinais_enviados": 0,
                             "notificacao_inicial_enviada": False,
                             "ultima_porcentagem_top": {},
+                            "contador_rodadas": 0,
                         }
                     )
 
@@ -170,38 +172,69 @@ async def monitor_roulette(roulette_id):
                         for num in novo_top_numeros
                     )
 
-                    if not mesa["notificacao_inicial_enviada"]:
-                        mesa["top_tendencias"] = novo_top_numeros
-                        mesa["tendencias"] = nova_tendencia
-                        mesa["ultima_porcentagem_top"] = {
-                            num: nova_tendencia[num]["porcentagem"]
-                            for num in novo_top_numeros
-                        }
+                    mesa["tendencias"] = nova_tendencia
+                    mesa["top_tendencias"] = novo_top_numeros
+                    mesa["ultima_porcentagem_top"] = {
+                        num: nova_tendencia[num]["porcentagem"]
+                        for num in novo_top_numeros
+                    }
+
+                    numero_atual = mesa["historico"][0]
+
+                    if numero_atual == mesa["ultimo_numero_processado"]:
+                        await asyncio.sleep(2)
+                        continue
+
+                    mesa["ultimo_numero_processado"] = numero_atual
+
+                    if not mesa["entrada_ativa"] and numero_atual in novo_top_numeros:
+                        mesa["entrada_ativa"] = True
+                        mesa["numero_entrada"] = numero_atual
+                        mesa["gale"] = 0
                         formatar_tendencias_console(
                             roulette_id, novo_top, nova_tendencia, historico_size
                         )
-                        await enviar_tendencias_telegram(
-                            roulette_id, novo_top, nova_tendencia, historico_size
-                        )
-                        mesa["notificacao_inicial_enviada"] = True
-
-                    elif mesa["contador_rodadas"] % TENDENCIA_UPDATE_INTERVAL == 0 and (
-                        novo_top_numeros != mesa["top_tendencias"] or mudou_porcentagem
-                    ):
-                        mesa["top_tendencias"] = novo_top_numeros
-                        mesa["tendencias"] = nova_tendencia
-                        mesa["ultima_porcentagem_top"] = {
-                            num: nova_tendencia[num]["porcentagem"]
-                            for num in novo_top_numeros
-                        }
-                        formatar_tendencias_console(
-                            roulette_id, novo_top, nova_tendencia, historico_size
-                        )
-                        await enviar_tendencias_telegram(
-                            roulette_id, novo_top, nova_tendencia, historico_size
+                        await notificar_entrada(
+                            roulette_id, numero_atual, nova_tendencia
                         )
 
-                await asyncio.sleep(10)
+                    elif mesa["entrada_ativa"]:
+                        if pertence_ao_padrao(numero_atual):
+                            mesa["greens"] += 1
+                            mesa["total"] += 1
+                            if mesa["gale"] == 1:
+                                mesa["greens_g1"] += 1
+                            elif mesa["gale"] == 2:
+                                mesa["greens_g2"] += 1
+
+                            await send_telegram_message(
+                                f"✅✅✅ GREEN!!! ✅✅✅\n\n({mesa['historico'][0]}|{mesa['historico'][1]}|{mesa['historico'][2]})"
+                            )
+                            mesa["entrada_ativa"] = False
+                            mesa["numero_entrada"] = None
+                            mesa["gale"] = 0
+
+                        elif mesa["gale"] == 0:
+                            mesa["gale"] = 1
+                            await send_telegram_message(
+                                f"🔁 Primeiro GALE ({numero_atual})"
+                            )
+                        elif mesa["gale"] == 1:
+                            mesa["gale"] = 2
+                            await send_telegram_message(
+                                f"🔁 Segundo e último GALE ({numero_atual})"
+                            )
+                        else:
+                            mesa["loss"] += 1
+                            mesa["total"] += 1
+                            await send_telegram_message(
+                                f"❌❌❌ LOSS!!! ❌❌❌\n\n({mesa['historico'][0]}|{mesa['historico'][1]}|{mesa['historico'][2]})"
+                            )
+                            mesa["entrada_ativa"] = False
+                            mesa["numero_entrada"] = None
+                            mesa["gale"] = 0
+
+                await asyncio.sleep(2)
 
             except Exception as e:
                 print(f"[ERRO] {roulette_id}: {str(e)}")
