@@ -5,7 +5,7 @@ from datetime import datetime
 from bot.utils import escape_markdown_v2, send_telegram_message
 from config import ROULETTES, HISTORICO_MAX
 
-BLACK_SNAKE = [2, 6, 10, 13, 17, 24, 26, 28, 31, 35]
+BLACK_SNAKE = [2, 6, 8, 10, 13, 17, 20, 24, 26, 28, 31, 35]
 HISTORICO_COMPLETO_SIZE = 500
 TENDENCIA_UPDATE_INTERVAL = 10
 MINIMO_OCORRENCIAS = 5
