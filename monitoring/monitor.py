@@ -71,27 +71,12 @@ def analisar_tendencias(historico):
 
 
 def get_top_tendencias(tendencias, n=10):
-    filtrado = {k: v for k, v in tendencias.items() if v["total"] >= MINIMO_OCORRENCIAS}
-    return sorted(
-        filtrado.items(), key=lambda x: (-x[1]["porcentagem"], -x[1]["total"])
-    )[:n]
-
-
-def formatar_tendencias_console(
-    roulette_id, top_tendencias, tendencias, historico_size
-):
-    header = (
-        f"\n=== TENDÊNCIAS {roulette_id} === (Últimas {historico_size} rodadas) ==="
-    )
-    print(header)
-    if not top_tendencias:
-        print("Aguardando dados suficientes para análise...")
-        return
-    for i, (num, stats) in enumerate(top_tendencias, 1):
-        print(
-            f"{i}º - Número {num}: {stats['porcentagem']}% (BLACK_SNAKE em{stats['chamou_black_snake']}/{stats['total']})"
-        )
-    print("=" * len(header.split("\n")[0]))
+    filtrado = {
+        k: v
+        for k, v in tendencias.items()
+        if v["total"] >= MINIMO_OCORRENCIAS and v["porcentagem"] >= 80
+    }
+    return sorted(filtrado.items(), key=lambda x: -x[1]["porcentagem"])[:n]
 
 
 async def notificar_entrada(roulette_id, numero, tendencias):
@@ -191,9 +176,7 @@ async def monitor_roulette(roulette_id):
                         mesa["entrada_ativa"] = True
                         mesa["numero_entrada"] = numero_atual
                         mesa["gale"] = 0
-                        formatar_tendencias_console(
-                            roulette_id, novo_top, nova_tendencia, historico_size
-                        )
+                        
                         await notificar_entrada(
                             roulette_id, numero_atual, nova_tendencia
                         )
